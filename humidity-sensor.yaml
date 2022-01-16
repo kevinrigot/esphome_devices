@@ -1,0 +1,74 @@
+substitutions:
+  device_name: humidity_sensor
+esphome:
+  name: $device_name
+  platform: ESP8266
+  board: d1_mini_lite
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.1.26
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: ${device_name} Fallback Hotspot
+    password: !secret wifi_password
+
+captive_portal:
+
+sensor:
+  - platform: dht
+    model: DHT22
+    pin: D2
+    temperature:
+      name: "Room Temperature"
+    humidity:
+      name: "Room Humidity"
+    update_interval: 10s
+  - platform: adc
+    name: ${device_name}.battery_voltage
+    pin: A0
+    id: "VCC"
+    update_interval: 10s
+    filters:
+      - multiply: 6.6
+      - offset: 0.2
+  - platform: template
+    name: ${device_name}.battery_level
+    unit_of_measurement: '%'
+    update_interval: 10s
+    # 3.5V to 4.1V
+    lambda: |-
+      return ((id(VCC).state - 3.5) / 0.6) * 100.00;
+      
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret hass_api_password
+
+ota:
+  password: !secret hass_api_password
+
+deep_sleep:
+   id: deep_sleep_1
+   run_duration: 30s
+   sleep_duration: 60min
+  
+mqtt:
+  broker: !secret mqtt_url
+  username: !secret mqtt_user
+  password: !secret mqtt_password
+  on_message:
+    - topic: ${device_name}/ota_mode
+      payload: 'ON'
+      then:
+        - deep_sleep.prevent: deep_sleep_1
+    - topic: ${device_name}/sleep_mode
+      payload: 'ON'
+      then:
+        - deep_sleep.enter: deep_sleep_1
